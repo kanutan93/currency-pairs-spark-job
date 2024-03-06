@@ -1,10 +1,11 @@
 import org.apache.spark.sql
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.functions.{btrim, col, collect_list, concat_ws, count, countDistinct, desc, grouping, lit, percentile_approx, row_number, split}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 
 object BostonCrimesApp {
+
   def main(args: Array[String]): Unit = {
     val sparkSession = SparkSession.builder()
       .appName("BostonCrimesApp")
@@ -13,19 +14,26 @@ object BostonCrimesApp {
 
     val crimeDataFrame = getCrimeDataFrame(sparkSession)
     val offenseCodeDataFrame = getOffenseCodeDataFrame(sparkSession)
+    val crimesTotalDataFrame = getCrimesTotalDataFrame(crimeDataFrame)
+    val crimesMonthlyDataFrame = getCrimesMonthlyDataFrame(crimeDataFrame)
     val frequentCrimeTypesDataFrame = getFrequentCrimeTypesDataFrame(crimeDataFrame, offenseCodeDataFrame)
+    val avgLatLongDataFrame = getAvgLatLongDataFrame(crimeDataFrame)
 
-    val result = crimeDataFrame
-      .groupBy("DISTRICT")
-      .agg(
-        countDistinct(col("*")).as("crimes_total"),
-//        percentile_approx((col("MONTH")), lit(0.5), lit(1000)).as("crimes_monthly"),
+    crimeDataFrame.createTempView("crimeDataFrame")
+    crimesTotalDataFrame.createTempView("crimesTotalDataFrame")
+    crimesMonthlyDataFrame.createTempView("crimesMonthlyDataFrame")
+    frequentCrimeTypesDataFrame.createTempView("frequentCrimeTypesDataFrame")
+    avgLatLongDataFrame.createTempView("avgLatLongDataFrame")
 
+    val result = sparkSession.sql("SELECT DISTINCT(cr.DISTRICT) district, crimes_total, crimes_monthly, frequent_crime_types, avgll.lat, avgll.long " +
+      "FROM crimeDataFrame cr " +
+      "JOIN crimesTotalDataFrame crt ON cr.DISTRICT = crt.DISTRICT " +
+      "JOIN crimesMonthlyDataFrame crm ON cr.DISTRICT = crm.DISTRICT " +
+      "JOIN frequentCrimeTypesDataFrame frq ON cr.DISTRICT = frq.DISTRICT " +
+      "JOIN avgLatLongDataFrame avgll ON cr.DISTRICT = avgll.DISTRICT "
       )
-      .join(frequentCrimeTypesDataFrame, frequentCrimeTypesDataFrame.col("DISTRICT") === crimeDataFrame.col("DISTRICT"), "inner")
-      .drop(frequentCrimeTypesDataFrame.col("DISTRICT"))
-      .select("DISTRICT", "crimes_total", "frequent_crime_types")
     result.show()
+    result.write.mode("overwrite").parquet("bostoncrimes/result")
 
     sparkSession.stop()
   }
@@ -42,6 +50,26 @@ object BostonCrimesApp {
       .option("header", true)
       .option("inferSchema", true)
       .csv("bostoncrimes/offense_codes.csv")
+  }
+
+  def getCrimesTotalDataFrame(crimeDataFrame: DataFrame): sql.DataFrame = {
+    crimeDataFrame
+      .groupBy("DISTRICT")
+      .agg(
+        count("*").as("crimes_total")
+      )
+  }
+
+  def getCrimesMonthlyDataFrame(crimeDataFrame: DataFrame): sql.DataFrame = {
+    crimeDataFrame
+      .groupBy("DISTRICT", "MONTH", "YEAR")
+      .agg(
+        count("*").as("crime_count_by_month")
+      )
+      .groupBy("DISTRICT")
+      .agg(
+        percentile_approx(col("crime_count_by_month"), lit(0.5), lit(100)).as("crimes_monthly")
+      )
   }
 
   private def getFrequentCrimeTypesDataFrame(crimeDataFrame: sql.DataFrame, offenseCodeDataFrame: sql.DataFrame): sql.DataFrame = {
@@ -70,6 +98,15 @@ object BostonCrimesApp {
       .select(
         col("DISTRICT"),
         concat_ws(", ", col("frequent_crime_types_list")).as("frequent_crime_types")
+      )
+  }
+
+  private def getAvgLatLongDataFrame(crimeDataFrame: sql.DataFrame): sql.DataFrame = {
+    crimeDataFrame
+      .groupBy("DISTRICT")
+      .agg(
+        avg("lat").as("lat"),
+        avg("long").as("long"),
       )
   }
 }
