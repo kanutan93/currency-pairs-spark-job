@@ -69,7 +69,7 @@ object BostonCrimesApp {
       .agg(collect_list("crime_type").as("frequent_crime_types_list"))
       .select(
         col("DISTRICT"),
-        concat_ws(",", col("frequent_crime_types_list")).as("frequent_crime_types")
+        concat_ws(", ", col("frequent_crime_types_list")).as("frequent_crime_types")
       )
   }
 }
