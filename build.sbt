@@ -4,7 +4,7 @@ ThisBuild / scalaVersion := "2.12.18"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "boston-crimes"
+    name := "currency-pairs"
   )
 
 val sparkVersion = "3.5.1"
