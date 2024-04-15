@@ -8,6 +8,7 @@ object CurrencyPairsApp {
       .appName("CurrencyPairs")
       .config("spark.sql.warehouse.dir","hdfs://10.128.0.29/user/hive/warehouse")
       .config("hive.metastore.uris", "thrift://10.128.0.29:9083")
+      .enableHiveSupport()
       .getOrCreate()
     spark.sql("show tables").show()
 
@@ -18,7 +19,7 @@ object CurrencyPairsApp {
       .na.fill(1, Array("EUR", "USD", "RUB", "GEL", "JPY", "CAD"))
       .withColumn("last_update", to_timestamp(column("last_update"), "yyyy-MM-dd HH:mm:ss"))
 
-    forex_rates.write.mode("append").insertInto("default.currency_rates")
+    forex_rates.write.mode("append").insertInto("currency_rates")
 
     spark.stop()
   }
