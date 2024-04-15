@@ -6,7 +6,7 @@ object CurrencyPairsApp {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder()
       .appName("CurrencyPairs")
-      .config("spark.sql.warehouse.dir","hdfs://10.128.0.29/users/hive/warehouse")
+      .config("spark.sql.warehouse.dir","hdfs://10.128.0.29/user/hive/warehouse")
       .config("hive.metastore.uris", "thrift://10.128.0.29:9083")
       .getOrCreate()
     spark.sql("show tables").show()
